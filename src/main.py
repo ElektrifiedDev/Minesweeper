@@ -20,7 +20,7 @@ def resize_terminal(cols, rows):
 
 def resize_window(board_size):
     cols = max(50, (board_size * 2) + 5)
-    lines = max(10, board_size + 10)
+    lines = max(10, board_size + 20)
     resize_terminal(cols, lines)
 
 def board_size():
@@ -71,7 +71,7 @@ def place_mines(board, num_mines, size, safe_row, safe_col):
     while mines < num_mines:
         row = rand.randint(0, size - 1)
         col = rand.randint(0, size - 1)
-        if board[row][col] != "[M]" and (row != safe_row and col != safe_col):
+        if board[row][col] != "[M]" and not (row == safe_row and col == safe_col):
             board[row][col] = "[M]"
             mines += 1
     return board
@@ -144,6 +144,13 @@ def play_game():
     start_time = None
     elapsed_time = 0
 
+    third_recent_move = None
+    second_recent_move = None
+    first_recent_move = None
+
+    max_flags = num_mines
+    num_placed_flags = 0
+
     while not game_over:
         clear_console()
 
@@ -166,14 +173,32 @@ def play_game():
             display_matrix.append(row_display)
 
         if (size * size) - cells_revealed == num_mines:
-            print(Fore.GREEN + f"Winner! Field Cleared in {formatted_time}.")
+            clear_console()
+            print(Fore.GREEN + "=======================================")
+            print(Fore.GREEN + f"        VICTORY! FIELD CLEARED")
+            print(Fore.GREEN + "=======================================")
+            print(Fore.WHITE + f"  Time: {formatted_time}")
+            print(Fore.WHITE + f"  Size: {size}x{size}")
+            print(Fore.WHITE + f"  Seed: {input_seed}")
+            print(Fore.GREEN + "=======================================\n")
             display_board(board, size)
             break
 
         print(Fore.CYAN + f"Mines: {num_mines} | Safe cells revealed: {cells_revealed}/{(size*size - num_mines)}")
+        print(Fore.CYAN + f"Flags: {num_placed_flags}/{max_flags}")
         print(Fore.CYAN + f"Time Elapsed: {formatted_time}\n")
         print(Fore.CYAN + f"Seed: {input_seed} (Hash: {hashed_seed})\n")
         display_board(display_matrix, size)
+        print(Fore.YELLOW + "\nRecent Moves:")
+        if first_recent_move: 
+            print(Fore.WHITE + f"1. {first_recent_move}")
+            if second_recent_move: 
+                print(Fore.WHITE + f"2. {second_recent_move}")
+                if third_recent_move: 
+                    print(Fore.WHITE + f"3. {third_recent_move}")
+                else: print(Fore.WHITE + "No earlier moves.")
+            else: print(Fore.WHITE + "No earlier moves.")
+        else: print(Fore.WHITE + "No moves yet.")
         
         try:
             move = input("\nEnter (r c) or (f r c): ").lower().strip().split()
@@ -182,7 +207,27 @@ def play_game():
             if move[0] == 'f':
                 r, c = int(move[1]), int(move[2])
                 if not revealed[r][c]: # Can't flag revealed cells
+                    if not flags[r][c] and num_placed_flags >= max_flags:
+                        print(Fore.RED + "Flag limit reached! Unflag another cell first.")
+                        time.sleep(1.5)
+                        continue
                     flags[r][c] = not flags[r][c] # Toggle flag
+                    # Update flag count
+                    if flags[r][c]:
+                        num_placed_flags += 1
+                        # Update recent moves tracking
+                        third_recent_move = second_recent_move
+                        second_recent_move = first_recent_move
+                        first_recent_move = f"Flagged:   ({Fore.YELLOW + str(r) + Fore.WHITE}, {Fore.YELLOW + str(c) + Fore.WHITE})"
+                    else:
+                        num_placed_flags -= 1
+                        # Update recent moves tracking
+                        third_recent_move = second_recent_move
+                        second_recent_move = first_recent_move
+                        first_recent_move = f"Unflagged: ({Fore.YELLOW + str(r) + Fore.WHITE}, {Fore.YELLOW + str(c) + Fore.WHITE})"
+                else:
+                    print(Fore.RED + f"Cell ({Fore.WHITE + str(r) + Fore.RED}, {Fore.WHITE + str(c) + Fore.RED}) is already revealed! Can't flag.")
+                    time.sleep(1.5)
                 continue
             
             r, c = int(move[0]), int(move[1])
@@ -192,13 +237,34 @@ def play_game():
                 board = update_numbers(board, size)
                 start_time = time.time()
                 first_move = False
-
             if flags[r][c]:
-                print(Fore.YELLOW + "Cell is flagged! Unflag it first.")
-                time.sleep(1)
-            elif board[r][c] == "[M]":
+                print(Fore.RED + f"Cell ({Fore.WHITE + str(r) + Fore.RED}, {Fore.WHITE + str(c) + Fore.RED}) is flagged! Unflag it first.")
+                time.sleep(1.5)
+                continue
+            third_recent_move = second_recent_move
+            second_recent_move = first_recent_move
+            first_recent_move = f"Revealed:  ({Fore.YELLOW + str(r) + Fore.WHITE}, {Fore.YELLOW + str(c) + Fore.WHITE})"
+            if board[r][c] == "[M]":
+                if start_time:
+                    elapsed_time = time.time() - start_time
+                formatted_time = str(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
+                
                 clear_console()
-                print(Fore.RED + "BOOM!")
+
+                correct_flags = 0
+                for row_idx in range(size):
+                    for col_idx in range(size):
+                        if flags[row_idx][col_idx] and board[row_idx][col_idx] == "[M]":
+                            correct_flags += 1
+                
+                print(Fore.RED + "=======================================")
+                print(Fore.RED + "        GAME OVER - BOOM!")
+                print(Fore.RED + "=======================================")
+                print(Fore.WHITE + f"  Time Survived:      {formatted_time}")
+                print(Fore.WHITE + f"  Mines Identified:   {correct_flags}/{num_mines}")
+                print(Fore.WHITE + f"  Size:               {size}x{size}")
+                print(Fore.WHITE + f"  Seed:               {input_seed}")
+                print(Fore.RED + "=======================================\n")
                 display_board(board, size)
                 game_over = True
             else:
@@ -206,7 +272,7 @@ def play_game():
 
         except (ValueError, IndexError):
             print(Fore.RED + "Invalid input.")
-            time.sleep(1)
+            time.sleep(1.5)
 
     input("\nPress Enter...")
     return play_game()
